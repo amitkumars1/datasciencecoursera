@@ -1,4 +1,6 @@
 datasciencecoursera
 ===================
 
-Publicly shared repo to share data science related material 
+Publicly shared repo as part of Data Scientist's Toolbox assignment.
+
+
