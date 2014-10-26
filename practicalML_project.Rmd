@@ -1,0 +1,144 @@
+# Human Activity Recognition: Practical Machine Learning
+"
+
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The goal is to use data from accelerometers placed on the belt, forearm, arm, and dumbell of 6 participants to  to predict the manner in which they did the exercise based on traning data and testing data.
+
+## Data Sources
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project comes from this original source: http://groupware.les.inf.puc-rio.br/har
+
+## Code Begin
+Loading the appropriate packages.Make sure you have these installed before the code could function
+```{r,warning=FALSE}
+library(caret)
+library(corrplot)
+library(kernlab)
+library(knitr)
+library(randomForest)
+library(rattle)
+library(RColorBrewer)
+```
+```{r setoptions, echo = FALSE}
+opts_chunk$set(cache = FALSE)
+```
+
+### Getting and Cleaning data for the Model
+Two csv files contatining the training and test data was downloaded from Amazon's cloudfront on the 24/08/2014 into a data folder in the working directory. 
+
+```{r, eval = FALSE}
+# check if a data folder exists; if not then create one
+#if (!file.exists("data")) {dir.create("data")}
+
+```
+
+Downloading csv file and loading in from the local directory.
+Make sure you have a data folder in your code path
+
+```{r}
+# fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+# destfile1 <- "./data/pml-training.csv"
+# fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+# destfile2 <- "./data/pml-testing.csv"
+
+# dowload data
+# download.file(fileUrl1, destfile = destfile1)
+# download.file(fileUrl2, destfile = destfile2)
+# 
+#read csv and removing Na and #DIV/0 fields
+set.train <- read.csv(file = './data/pml-training.csv',na.strings = c('NA','#DIV/0!',''))
+set.test <- read.csv(file = './data/pml-testing.csv',na.strings = c('NA','#DIV/0!',''))
+
+#removing first 7 columns and redundnat columns
+set.train.clean <- set.train[8:length(set.train)]
+
+set.train.clean = set.train.clean[colnames(set.train.clean[colSums(is.na(set.train.clean)) == 0])]
+```
+
+
+### Model 
+Slicing the training data set into two data sets: 80% for training, 20% for testing:
+```{r}
+# split the cleaned testing data into training and cross validation
+inTrain <- createDataPartition(y = set.train.clean$classe, p = 0.8, list = FALSE)
+training <- set.train.clean[inTrain, ]
+testing.val <- set.train.clean[-inTrain, ]
+```
+
+
+
+####Data inspection
+require(ggplot2)
+p <- ggplot(training, aes(x = classe)) + geom_histogram()
+p
+
+
+We are using a Random forest classification method to predict the classification because RF models have low variance and low bias without worrying much about 
+how they are tuned. 
+
+Ease of use and quality of prediction are others why I have preferred random forest over other methods 
+
+```{r}
+fit a model to predict the classe using everything else as a predictor
+model.rf <- train(classe ~ ., data = training, 
+                  method = 'rf',trControl = trainControl(method = "cv", 
+                                                         number = 4, 
+                                                         allowParallel = TRUE, 
+                                                         verboseIter = TRUE))
+#load("model.rf.RData")
+pred.rf <- predict(model.rf,testing.val)
+```
+
+The model produced a very small OOB error rate of .56%. This was deemed satisfactory enough to progress the testing.
+
+### Cross-validation
+The model was then used to classify the remaining 20% of data. The results were placed in a confusion matrix along with the actual classifications in order to determine the accuracy of the model.
+
+```{r}
+# crossvalidate the model using the remaining 30% of data
+predictCrossVal <- predict(model.rf, testing.val)
+confusionMatrix(testing.val$classe, predictCrossVal)
+```
+
+```{r}
+#data set of model predictions on training data vs. actual observations
+results.OO <- data.frame(pred = predict(model.rf, testing.val),
+                         obs = testing.val$classe)
+table(results.OO)
+```
+
+Same result can be plotted using ggplot. This plot demonstrate the classfication errors happened at pointed of overlap between classe types.
+
+```{r}
+p <- ggplot(results.OO, aes(x = pred, y = obs))
+p <- p + geom_jitter(position = position_jitter(width = 0.25, height = 0.25))
+p
+```
+
+The accuracy of the model is 0.9944. Now we will test this model against the test data set which we seperately downloaded as a csv file
+
+### Predictions
+
+```{r}
+# Applying model to the testing data
+new.data.test <- read.csv("./data/pml-testing.csv", na.strings = c('NA','#DIV/0!',''))
+new.data.test.clean <- new.data.test[8:length(new.data.test)]
+new.data.test.clean = new.data.test.clean[colnames(new.data.test.clean[colSums(is.na(new.data.test.clean)) == 0])]
+# predict the classes of the test set
+predictTest <- predict(model.rf, new.data.test.clean)
+predictTest
+```
+
+### Conclusion
+Here we have built a randomforest model to classify a person's quality of excerise using multitudes of data collected from health activities. Model has a very good accuracy and low Out of sample error. Model has been applied to test set and also to a seperate set  for the part2 of the project.
